@@ -2,25 +2,69 @@ import streamlit as st
 import os
 import pandas as pd
 import time
+import bcrypt
 
-USERS_FILE = os.path.join(os.path.dirname(__file__), "users.csv")
-    
+# ─────────────────────────────────────────────────────────────────────────────
+# IMPORTANT NOTE ON STORAGE
+# Users are stored in a local CSV file. This is intentional for simplicity and
+# zero-cost hosting, but has two key limitations:
+#   1. Passwords are bcrypt-hashed (secure), but the file itself is NOT
+#      suitable for high-security production use.
+#   2. On Streamlit Community Cloud (free tier) the filesystem is ephemeral —
+#      user accounts created after deployment will be lost on container restart.
+# For a persistent, production-grade solution, migrate to a free-tier database
+# such as Supabase (PostgreSQL) or MongoDB Atlas.
+# ─────────────────────────────────────────────────────────────────────────────
+
+USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.csv")
+COLUMNS = ["username", "email", "gender", "password_hash"]
+
 if not os.path.exists(USERS_FILE):
-    pd.DataFrame(columns=["username","email", "gender", "password"]).to_csv(USERS_FILE, index=False)
-        
+    pd.DataFrame(columns=COLUMNS).to_csv(USERS_FILE, index=False)
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-def load_user():
-    return pd.read_csv(USERS_FILE)
 
-def save_user(username, email, gender, password):
+def _hash_password(plain: str) -> str:
+    """Return a bcrypt hash of the given password."""
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    """Return True if plain matches the stored bcrypt hash."""
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def load_user() -> pd.DataFrame:
+    """Load users CSV, creating it with correct columns if absent or empty."""
+    if not os.path.exists(USERS_FILE):
+        return pd.DataFrame(columns=COLUMNS)
+    try:
+        df = pd.read_csv(USERS_FILE)
+        # Back-compat: old rows may have a plain 'password' column
+        if "password" in df.columns and "password_hash" not in df.columns:
+            df = df.rename(columns={"password": "password_hash"})
+        return df
+    except Exception:
+        return pd.DataFrame(columns=COLUMNS)
+
+
+def save_user(username: str, email: str, gender: str, password_hash: str) -> None:
+    """Append a new user row to the CSV."""
     users = load_user()
-    users.loc[len(users)] = [username, email, gender, password] 
+    new_row = pd.DataFrame(
+        [[username, email, gender, password_hash]], columns=COLUMNS
+    )
+    users = pd.concat([users, new_row], ignore_index=True)
     users.to_csv(USERS_FILE, index=False)
-           
+
+
 def signup_page():
-    # Enhanced CSS for signup page - FIXED ALL WHITE SPACES
+    # ── Styling ───────────────────────────────────────────────────────────────
     st.markdown("""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
@@ -248,10 +292,10 @@ def signup_page():
         }
         </style>
     """, unsafe_allow_html=True)
-    
+
     # Center the form
     col1, col2, col3 = st.columns([1, 2, 1])
-    
+
     with col2:
         st.markdown("""
             <div class="signup-header">
@@ -260,39 +304,40 @@ def signup_page():
                 <p>Join Ruby AI and start your journey</p>
             </div>
         """, unsafe_allow_html=True)
-        
+
         with st.form("reg-form"):
             username = st.text_input("👤 Username", placeholder="Enter your username")
             email = st.text_input("📧 Email", placeholder="your.email@example.com")
             gender = st.selectbox("⚧ Gender", ["Male", "Female", "Other"])
             password = st.text_input("🔒 Password", type="password", placeholder="Enter a secure password")
-            
+
             signup_btn = st.form_submit_button("🚀 Create Account")
-            
+
             if signup_btn:
                 if not username or not email or not password:
                     st.error("⚠️ Please fill all required fields")
                     return
-                
+
                 users = load_user()
-                
-                if username in users.username.values:
-                    st.error("❌ User already exists!")    
+
+                if username in users["username"].astype(str).values:
+                    st.error("❌ Username already exists!")
                 else:
-                    save_user(username, email, gender, password)
-                    st.session_state.gender = gender                                                                 
+                    hashed = _hash_password(password)
+                    save_user(username, email, gender, hashed)
+                    st.session_state.gender = gender
                     st.success("✅ Registered successfully! Redirecting to login...")
                     time.sleep(2)
-                    st.session_state.page = "Login"   
+                    st.session_state.page = "Login"
                     st.rerun()
-        
+
         # Back to home link
         st.markdown("""
             <div class="back-link">
                 Already have an account? 
             </div>
         """, unsafe_allow_html=True)
-        
+
         if st.button("← Back to Login", use_container_width=True):
             st.session_state.page = "Login"
             st.rerun()

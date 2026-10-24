@@ -1,14 +1,6 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 import json
-
-from scrap_sunbeam_cirtified_courses import scrape_courses_page
-from scrape_about_us import scrape_aboutus_page
-from scrap_internship import scrape_internship_page
-from scrape_entrance_course import scrape_enter_page
-from scrape_mastering_mcq import scrape_master_page
 
 # --------------------------------------------------
 # Text Splitter
@@ -57,6 +49,13 @@ def normalize_scraped_output(scraped_data, source):
 # MAIN
 # --------------------------------------------------
 if __name__ == "__main__":
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from scrap_sunbeam_cirtified_courses import scrape_courses_page
+    from scrape_about_us import scrape_aboutus_page
+    from scrap_internship import scrape_internship_page
+    from scrape_entrance_course import scrape_enter_page
+    from scrape_mastering_mcq import scrape_master_page
 
     chrome_options = Options()
     driver = webdriver.Chrome(options=chrome_options)

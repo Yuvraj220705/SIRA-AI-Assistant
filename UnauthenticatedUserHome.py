@@ -332,8 +332,14 @@ You are an assistant.
         Question: {user_que}
                """
 
-               response = llm.invoke(context)
-               reply = response.content
+               response = llm.invoke(context) if llm else None
+               if response is None:
+                   reply = (
+                       "⚠️ AI is not configured. Please set GROQ_API_KEY in Streamlit secrets "
+                       "or your .env file. Sign up for a free key at https://console.groq.com"
+                   )
+               else:
+                   reply = response.content
                st.write(reply)
                st.session_state.conversation.append({
                    "role": "assistant",
@@ -342,9 +348,16 @@ You are an assistant.
 
 load_dotenv()
 
-llm = init_chat_model(
-    model = "llama-3.3-70b-versatile",
-    model_provider= "openai",
-    base_url = "https://api.groq.com/openai/v1",
-    api_key = _get_secret("GROQ_API_KEY")
-)
+_groq_key = _get_secret("GROQ_API_KEY")
+if _groq_key:
+    try:
+        llm = init_chat_model(
+            model="llama-3.3-70b-versatile",
+            model_provider="openai",
+            base_url="https://api.groq.com/openai/v1",
+            api_key=_groq_key,
+        )
+    except Exception:
+        llm = None
+else:
+    llm = None

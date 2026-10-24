@@ -2,41 +2,34 @@ import streamlit as st
 import signup as sg
 import time
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    
-if "username" not in st.session_state:
-    st.session_state.username = None
 
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-    
 def authenticate(username, password):
+    """Return True and set session state if credentials are valid."""
     users = sg.load_user()
 
-    # normalize input
+    if users.empty:
+        return False
+
+    # Normalise input
     username = str(username).strip()
-    password = str(password).strip()
 
-    # 🔑 force dataframe columns to string
     users["username"] = users["username"].astype(str).str.strip()
-    users["password"] = users["password"].astype(str).str.strip()
 
-    user = users[
-        (users["username"] == username) &
-        (users["password"] == password)
-    ]
+    match = users[users["username"] == username]
 
-    if not user.empty:
+    if match.empty:
+        return False
+
+    stored_hash = str(match.iloc[0]["password_hash"]).strip()
+
+    if sg._verify_password(password.strip(), stored_hash):
         st.session_state.authenticated = True
         st.session_state.username = username
-        st.session_state.gender = user.iloc[0]["gender"]
+        st.session_state.gender = match.iloc[0].get("gender", "Other")
         return True
 
     return False
 
-
-  
 def login_page():
     # Enhanced CSS for login page - FIXED ALL WHITE SPACES
     st.markdown("""

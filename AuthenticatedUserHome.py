@@ -43,7 +43,11 @@ def lm_model():
 def get_vectordb():
     return vs.load_chroma_db()
 
-vectordb = get_vectordb()
+try:
+    vectordb = get_vectordb()
+except Exception as _vdb_err:
+    vectordb = None
+    # Will surface a clean error inside the page function if queries are attempted.
 # RAG_PROMPT = """
 # You are an AI assistant that helps users by providing accurate and concise information based on the provided context from Sunbeam's courses and offerings. Use the context to answer the user's questions effectively.
 # If the context does not contain the answer, respond with "I'm sorry, I don't have that information right now."
@@ -56,10 +60,28 @@ def rag_answer(question, model_choice):
     if question is None or not str(question).strip():
         return "Please ask a valid question.", []
 
+    if vectordb is None:
+        return (
+            "⚠️ The knowledge base (ChromaDB) could not be loaded. "
+            "Please check that the `chroma_db/` folder exists in the app directory.",
+            []
+        )
+
     question = str(question).strip()
 
     docs = vectordb.similarity_search(question, k=5)
     context = "\n\n".join(d.page_content for d in docs)
+
+    if model_choice == "LM Studio (local only)":
+        import socket
+        try:
+            socket.create_connection(("127.0.0.1", 1234), timeout=1).close()
+        except OSError:
+            return (
+                "⚠️ LM Studio is not reachable. This model runs only on your local machine. "
+                "Please switch to **GROQ model** or **Gemini model** in the sidebar.",
+                []
+            )
 
     llm = (
         groq_model() if model_choice == "GROQ model" else
@@ -467,9 +489,11 @@ def authenticated_user_home_page():
         st.markdown("### 🤖 AI Model Selection")
         model = st.radio(
             "Choose your model:",
-            ["GROQ model", "Gemini model", "LM Model"],
+            ["GROQ model", "Gemini model", "LM Studio (local only)"],
             label_visibility="collapsed"
         )
+        if model == "LM Studio (local only)":
+            st.warning("⚠️ LM Studio works only on your local machine. Select GROQ or Gemini for cloud use.", icon="🖥️")
         
         st.markdown("---")
         
